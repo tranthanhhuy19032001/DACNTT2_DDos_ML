@@ -59,51 +59,56 @@ class SimpleMonitor13(switch.SimpleSwitch13):
     def _flow_stats_reply_handler(self, ev):
         timestamp = datetime.now().timestamp()
 
-        with open("PredictFlowStatsfile.csv", "w") as file0:
-            file0.write(
-                'timestamp,datapath_id,flow_id,ip_src,tp_src,ip_dst,tp_dst,ip_proto,icmp_code,icmp_type,'
-                'flow_duration_sec,flow_duration_nsec,idle_timeout,hard_timeout,flags,packet_count,byte_count,'
-                'packet_count_per_second,packet_count_per_nsecond,byte_count_per_second,byte_count_per_nsecond,'
-                'avg_packet_size,flow_duration_total,idle_mean,idle_std,idle_max,idle_min\n'
-            )
+        file = open("PredictTrafficStatsFile.csv","w")
+        file.write(
+            'timestamp,datapath_id,flow_id,ip_src,tp_src,ip_dst,tp_dst,ip_proto,icmp_code,icmp_type,'
+            'flow_duration_sec,flow_duration_nsec,idle_timeout,hard_timeout,flags,packet_count,byte_count,'
+            'packet_count_per_second,packet_count_per_nsecond,byte_count_per_second,byte_count_per_nsecond,'
+            'avg_packet_size,flow_duration_total,idle_mean,idle_std,idle_max,idle_min\n'
+        )
 
-            body = ev.msg.body
-            for stat in sorted([flow for flow in body if flow.priority == 1],
-                               key=lambda flow: (flow.match['eth_type'], flow.match['ipv4_src'], flow.match['ipv4_dst'], flow.match['ip_proto'])):
+        body = ev.msg.body
+        for stat in sorted([flow for flow in body if flow.priority == 1],
+            key=lambda flow: (flow.match['eth_type'], flow.match['ipv4_src'], flow.match['ipv4_dst'], flow.match['ip_proto'])):
 
-                ip_src = stat.match['ipv4_src']
-                ip_dst = stat.match['ipv4_dst']
-                ip_proto = stat.match['ip_proto']
-                tp_src, tp_dst, icmp_code, icmp_type = 0, 0, -1, -1
+            ip_src = stat.match['ipv4_src']
+            ip_dst = stat.match['ipv4_dst']
+            ip_proto = stat.match['ip_proto']
+            tp_src, tp_dst, icmp_code, icmp_type = 0, 0, -1, -1
 
-                if ip_proto == 1:
-                    icmp_code = stat.match['icmpv4_code']
-                    icmp_type = stat.match['icmpv4_type']
-                elif ip_proto == 6:
-                    tp_src = stat.match['tcp_src']
-                    tp_dst = stat.match['tcp_dst']
-                elif ip_proto == 17:
-                    tp_src = stat.match['udp_src']
-                    tp_dst = stat.match['udp_dst']
+            if ip_proto == 1:
+                icmp_code = stat.match['icmpv4_code']
+                icmp_type = stat.match['icmpv4_type']
+            elif ip_proto == 6:
+                tp_src = stat.match['tcp_src']
+                tp_dst = stat.match['tcp_dst']
+            elif ip_proto == 17:
+                tp_src = stat.match['udp_src']
+                tp_dst = stat.match['udp_dst']
 
-                flow_id = f"{ip_src}{tp_src}{ip_dst}{tp_dst}{ip_proto}"
-                self._update_flow_data(flow_id, timestamp)
+            flow_id = f"{ip_src}{tp_src}{ip_dst}{tp_dst}{ip_proto}"
+            self._update_flow_data(flow_id, timestamp)
 
-                packet_count_per_second = self.safe_divide(stat.packet_count, stat.duration_sec)
-                packet_count_per_nsecond = self.safe_divide(stat.packet_count, stat.duration_nsec)
-                byte_count_per_second = self.safe_divide(stat.byte_count, stat.duration_sec)
-                byte_count_per_nsecond = self.safe_divide(stat.byte_count, stat.duration_nsec)
-                avg_packet_size = self.safe_divide(stat.byte_count, stat.packet_count)
-                flow_duration_total = stat.duration_sec + (stat.duration_nsec / 1e9)
-                idle_mean, idle_std, idle_max, idle_min = self._calculate_idle_times(flow_id)
+            packet_count_per_second = self.safe_divide(stat.packet_count, stat.duration_sec)
+            packet_count_per_nsecond = self.safe_divide(stat.packet_count, stat.duration_nsec)
+            byte_count_per_second = self.safe_divide(stat.byte_count, stat.duration_sec)
+            byte_count_per_nsecond = self.safe_divide(stat.byte_count, stat.duration_nsec)
+            avg_packet_size = self.safe_divide(stat.byte_count, stat.packet_count)
+            flow_duration_total = stat.duration_sec + (stat.duration_nsec / 1e9)
+            idle_mean, idle_std, idle_max, idle_min = self._calculate_idle_times(flow_id)
 
-                file0.write(
-                    f"{timestamp},{ev.msg.datapath.id},{flow_id},{ip_src},{tp_src},{ip_dst},{tp_dst},{ip_proto},"
-                    f"{icmp_code},{icmp_type},{stat.duration_sec},{stat.duration_nsec},{stat.idle_timeout},"
-                    f"{stat.hard_timeout},{stat.flags},{stat.packet_count},{stat.byte_count},{packet_count_per_second},"
-                    f"{packet_count_per_nsecond},{byte_count_per_second},{byte_count_per_nsecond},{avg_packet_size},"
-                    f"{flow_duration_total},{idle_mean},{idle_std},{idle_max},{idle_min}\n"
-                )
+            file.write("{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n"
+                .format(timestamp, ev.msg.datapath.id, flow_id, ip_src, tp_src,ip_dst, tp_dst,
+                        stat.match['ip_proto'],icmp_code,icmp_type,
+                        stat.duration_sec, stat.duration_nsec,
+                        stat.idle_timeout, stat.hard_timeout,
+                        stat.flags, stat.packet_count,stat.byte_count,
+                        packet_count_per_second,packet_count_per_nsecond,
+                        byte_count_per_second,byte_count_per_nsecond,
+                        avg_packet_size, flow_duration_total, idle_mean, 
+                        idle_std, idle_max, idle_min, avg_packet_size, 
+                        flow_duration_total, idle_mean, idle_std, idle_max, idle_min))
+        file.close()
 
     def _update_flow_data(self, flow_id, timestamp):
         if flow_id not in self.flow_data:
@@ -160,7 +165,7 @@ class SimpleMonitor13(switch.SimpleSwitch13):
 
     def flow_predict(self):
         try:
-            predict_flow_dataset = pd.read_csv('PredictFlowStatsfile.csv')
+            predict_flow_dataset = pd.read_csv('PredictTrafficStatsFile.csv')
             self._clean_dataset(predict_flow_dataset)
 
             X_predict_flow = predict_flow_dataset.values.astype('float64')
@@ -169,8 +174,8 @@ class SimpleMonitor13(switch.SimpleSwitch13):
             self._log_prediction_results(y_flow_pred, predict_flow_dataset)
             self._reset_prediction_file()
 
-        except Exception as e:
-            self.logger.error(f"Error during prediction: {e}")
+        except:
+            pass
 
     def _log_prediction_results(self, y_pred, dataset):
         legitimate_trafic = sum(1 for i in y_pred if i == 0)
@@ -201,10 +206,11 @@ class SimpleMonitor13(switch.SimpleSwitch13):
 
     @staticmethod
     def _reset_prediction_file():
-        with open("PredictFlowStatsfile.csv", "w") as file0:
-            file0.write(
-                'timestamp,datapath_id,flow_id,ip_src,tp_src,ip_dst,tp_dst,ip_proto,icmp_code,icmp_type,'
-                'flow_duration_sec,flow_duration_nsec,idle_timeout,hard_timeout,flags,packet_count,byte_count,'
-                'packet_count_per_second,packet_count_per_nsecond,byte_count_per_second,byte_count_per_nsecond,'
-                'avg_packet_size,flow_duration_total,idle_mean,idle_std,idle_max,idle_min\n'
-            )
+        file = open("PredictTrafficStatsFile.csv","w")
+        file.write(
+            'timestamp,datapath_id,flow_id,ip_src,tp_src,ip_dst,tp_dst,ip_proto,icmp_code,icmp_type,'
+            'flow_duration_sec,flow_duration_nsec,idle_timeout,hard_timeout,flags,packet_count,byte_count,'
+            'packet_count_per_second,packet_count_per_nsecond,byte_count_per_second,byte_count_per_nsecond,'
+            'avg_packet_size,flow_duration_total,idle_mean,idle_std,idle_max,idle_min\n'
+        )
+        file.close()

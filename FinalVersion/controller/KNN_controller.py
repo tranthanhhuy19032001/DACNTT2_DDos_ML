@@ -180,7 +180,7 @@ class SimpleMonitor13(switch.SimpleSwitch13):
     def _log_prediction_results(self, y_pred, dataset):
         legitimate_trafic = sum(1 for i in y_pred if i == 0)
         ddos_trafic = len(y_pred) - legitimate_trafic
-        
+
         # Comment handle predict accumulating
         #self.legitimate_traffic_counts.append(legitimate_trafic)
         #self.ddos_traffic_counts.append(ddos_trafic)
@@ -193,15 +193,19 @@ class SimpleMonitor13(switch.SimpleSwitch13):
         #total_legitimate = sum(self.legitimate_traffic_counts)
         #total_ddos = sum(self.ddos_traffic_counts)
         #total_flows = total_legitimate + total_ddos
-
-        self.logger.info("------------------------------------------------------------------------------")
+        
         # Checks if the proportion of legitimate traffic is greater than 80%. If it is, it logs "Legitimate traffic". If not, it logs "DDos attack is detected!!!".
         if (legitimate_trafic / (legitimate_trafic + ddos_trafic) * 100) > 80:
-            self.logger.info("Legitimate traffic ...")
+            self.logger.info("Benign traffic ...")
         else:
-            self.logger.info("DDos attack is detected!!!")
-            victim = int(dataset.iloc[ddos_trafic - 1, 5]) % 9
-            self.logger.info(f"Victim is host: h{victim}")
+            # If two last traffic have the same destination, then display the Victim host
+            # Else traffic hasn't been completed yet, so I cannot correctly identify the Victim host
+            if (int(dataset.iloc[ddos_trafic - 2, 5]) == int(dataset.iloc[ddos_trafic - 1, 5])):
+                print(dataset)
+                self.logger.warning("DDos attack is detected!!!")
+                victim = int(dataset.iloc[ddos_trafic - 1, 5]) % 9
+                self.logger.warning(f"Victim is host: h{victim}")
+        self.logger.info("------------------------------------------------------------------------------")
         self.logger.info("------------------------------------------------------------------------------")
 
     @staticmethod

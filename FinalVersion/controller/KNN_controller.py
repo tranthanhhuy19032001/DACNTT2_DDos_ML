@@ -1,6 +1,5 @@
 from ryu.controller import ofp_event
-from ryu.controller.handler import MAIN_DISPATCHER, DEAD_DISPATCHER
-from ryu.controller.handler import set_ev_cls
+from ryu.controller.handler import MAIN_DISPATCHER, DEAD_DISPATCHER, set_ev_cls
 from ryu.lib import hub
 
 import switch
@@ -46,7 +45,7 @@ class SimpleMonitor13(switch.SimpleSwitch13):
         while True:
             for dp in self.datapaths.values():
                 self._request_stats(dp)
-            hub.sleep(30) # Increase Request Interval to 30 Seconds
+            hub.sleep(20) # Increase Request Interval to 20 Seconds
             self.flow_predict()
 
     def _request_stats(self, datapath):

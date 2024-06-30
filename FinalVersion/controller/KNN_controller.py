@@ -202,7 +202,7 @@ class SimpleMonitor13(switch.SimpleSwitch13):
             if (int(dataset.iloc[ddos_trafic - 2, 5]) == int(dataset.iloc[ddos_trafic - 1, 5])):
                 print(dataset)
                 self.logger.warning("DDos attack is detected!!!")
-                victim = int(dataset.iloc[ddos_trafic - 1, 5]) % 9
+                victim = int(dataset.iloc[ddos_trafic - 1, 5]) % 10
                 self.logger.warning(f"Victim is host: h{victim}")
         self.logger.info("------------------------------------------------------------------------------")
         self.logger.info("------------------------------------------------------------------------------")

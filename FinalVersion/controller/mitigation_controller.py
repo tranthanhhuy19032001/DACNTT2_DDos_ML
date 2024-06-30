@@ -2,7 +2,7 @@ from ryu.controller import ofp_event
 from ryu.controller.handler import MAIN_DISPATCHER, DEAD_DISPATCHER, set_ev_cls
 from ryu.lib import hub
 
-import switchm
+import mitigation_switch
 from datetime import datetime
 import pandas as pd
 import numpy as np
@@ -10,10 +10,11 @@ from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import confusion_matrix, accuracy_score
 
-class SimpleMonitor13(switchm.SimpleSwitch13):
+class SimpleMonitor13(mitigation_switch.SimpleSwitch13):
     
     def __init__(self, *args, **kwargs):
         super(SimpleMonitor13, self).__init__(*args, **kwargs)
+        #print("Init 1 of CONTROLLER")
         self.datapaths = {}
         self.monitor_thread = hub.spawn(self._monitor)
         self.flow_data = {}
@@ -28,9 +29,11 @@ class SimpleMonitor13(switchm.SimpleSwitch13):
         end = datetime.now()
         print("End training!")
         print("Training time: ", (end - start))
+        #print("Init 2 of CONTROLLER")
 
     @set_ev_cls(ofp_event.EventOFPStateChange, [MAIN_DISPATCHER, DEAD_DISPATCHER])
     def _state_change_handler(self, ev):
+        #print("_state_change_handler of CONTROLLER")
         datapath = ev.datapath
         if ev.state == MAIN_DISPATCHER:
             if datapath.id not in self.datapaths:
@@ -42,6 +45,7 @@ class SimpleMonitor13(switchm.SimpleSwitch13):
                 del self.datapaths[datapath.id]
 
     def _monitor(self):
+        #print("_monitor of CONTROLLER")
         while True:
             for dp in self.datapaths.values():
                 self._request_stats(dp)
@@ -49,6 +53,7 @@ class SimpleMonitor13(switchm.SimpleSwitch13):
             self.flow_predict()
 
     def _request_stats(self, datapath):
+        #print("_request_stats of CONTROLLER")
         self.logger.debug('send stats request: %016x', datapath.id)
         parser = datapath.ofproto_parser
         req = parser.OFPFlowStatsRequest(datapath)
@@ -56,6 +61,7 @@ class SimpleMonitor13(switchm.SimpleSwitch13):
 
     @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)
     def _flow_stats_reply_handler(self, ev):
+        #print("_flow_stats_reply_handler of CONTROLLER")
         timestamp = datetime.now().timestamp()
 
         file = open("PredictTrafficStatsFile.csv","w")
@@ -133,6 +139,7 @@ class SimpleMonitor13(switchm.SimpleSwitch13):
         return numerator / denominator if denominator else 0
 
     def flow_training(self):
+        #print("flow_training of CONTROLLER")
         flow_dataset = pd.read_csv('DDos_and_Normal_Traffic_Dataset.csv')
         self._clean_dataset(flow_dataset)
 
@@ -163,6 +170,7 @@ class SimpleMonitor13(switchm.SimpleSwitch13):
         self.logger.info("------------------------------------------------------------------------------")
 
     def flow_predict(self):
+        #print("flow_predict of CONTROLLER")
         try:
             predict_flow_dataset = pd.read_csv('PredictTrafficStatsFile.csv')
             self._clean_dataset(predict_flow_dataset)
@@ -194,6 +202,7 @@ class SimpleMonitor13(switchm.SimpleSwitch13):
         #total_flows = total_legitimate + total_ddos
         
         # Checks if the proportion of legitimate traffic is greater than 80%. If it is, it logs "Legitimate traffic". If not, it logs "DDos attack is detected!!!".
+        self.mitigation_flag = 0
         if (legitimate_trafic / (legitimate_trafic + ddos_trafic) * 100) > 80:
             self.logger.info("Benign traffic ...")
         else:
@@ -201,11 +210,12 @@ class SimpleMonitor13(switchm.SimpleSwitch13):
             # Else traffic hasn't been completed yet, so I cannot correctly identify the Victim host
             if (int(dataset.iloc[ddos_trafic - 2, 5]) == int(dataset.iloc[ddos_trafic - 1, 5])):
                 print(dataset)
-                self.logger.warning("DDos attack is detected!!!")
-                victim = int(dataset.iloc[ddos_trafic - 1, 5]) % 9
-                self.logger.warning(f"Victim is host: h{victim}")
+                self.logger.info("DDos attack is detected!!!")
+                victim = int(dataset.iloc[ddos_trafic - 1, 5]) % 10
+                self.logger.info(f"Victim is host: h{victim}")
                 # Handle mitigation
                 self.mitigation_flag = 1
+                self.logger.info("Start Mitigation Pprocess...")
         self.logger.info("------------------------------------------------------------------------------")
         self.logger.info("------------------------------------------------------------------------------")
 

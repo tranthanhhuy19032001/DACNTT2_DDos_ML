@@ -18,6 +18,7 @@ class SimpleMonitor13(switch.SimpleSwitch13):
         self.datapaths = {}
         self.monitor_thread = hub.spawn(self._monitor)
         self.flow_data = {}
+        self.flag = 0
         # predict accumulating
         #self.legitimate_traffic_counts = []
         #self.ddos_traffic_counts = []
@@ -47,10 +48,13 @@ class SimpleMonitor13(switch.SimpleSwitch13):
     def _monitor(self):
         #print("_monitor of CONTROLLER")
         while True:
+            self.flag = 0
             for dp in self.datapaths.values():
                 self._request_stats(dp)
-            hub.sleep(20) # Increase Request Interval to 20 Seconds
+            hub.sleep(30)
             self.flow_predict()
+            #hub.sleep(30)
+            self.mitigation_flag = self.flag
 
     def _request_stats(self, datapath):
         #print("_request_stats of CONTROLLER")
@@ -170,7 +174,8 @@ class SimpleMonitor13(switch.SimpleSwitch13):
         self.logger.info("------------------------------------------------------------------------------")
 
     def flow_predict(self):
-        #print("flow_predict of CONTROLLER")
+        print("flow_predict of CONTROLLER")
+        self.flag = 0
         try:
             predict_flow_dataset = pd.read_csv('PredictTrafficStatsFile.csv')
             self._clean_dataset(predict_flow_dataset)
@@ -205,7 +210,7 @@ class SimpleMonitor13(switch.SimpleSwitch13):
         
         if (legitimate_trafic / (legitimate_trafic + ddos_trafic) * 100) > 80:
             self.logger.info("Benign traffic ...")
-            self.mitigation_flag = 0
+            self.flag = 0
         else:
             # If two last traffic have the same destination, then display the Victim host
             # Else traffic hasn't been completed yet, so I cannot correctly identify the Victim host
@@ -215,7 +220,7 @@ class SimpleMonitor13(switch.SimpleSwitch13):
                 victim = int(dataset.iloc[ddos_trafic - 1, 5]) % 10
                 self.logger.info(f"Victim is host: h{victim}")
                 # Handle mitigation
-                self.mitigation_flag = 1
+                self.flag = 1
         self.logger.info("------------------------------------------------------------------------------")
         self.logger.info("------------------------------------------------------------------------------")
 

@@ -20,12 +20,10 @@ class SimpleSwitch13(app_manager.RyuApp):
     def __init__(self, *args, **kwargs):
         super(SimpleSwitch13, self).__init__(*args, **kwargs)
         self.mac_to_port = {}  # Dictionary to map MAC addresses to ports
-        self.mitigation_flag = 0  # Flag for mitigation
-        self.arp_ip_to_port = {}  # Dictionary to map ARP IP addresses to ports
+        self.mitigation_flag = 0  # Condition to execute mitigation process
         self.ip_to_mac = {}  # Dictionary to map IP addresses to MAC addresses
-        self.port_need_to_block = 0
-        #self.blocked_ports = []
-        self.blocked_hosts = []
+        self.in_port_on_switch = 0 # The port connect betwwen the switch and the hosts
+        self.blocked_hosts = [] # Array contains hosts that have blocked
         #print("Init of SWITCH")
 
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
@@ -72,9 +70,7 @@ class SimpleSwitch13(app_manager.RyuApp):
         flow_serial_no = get_flow_number()
         self.add_flow(datapath, priority=100, match=match, actions=actions, serial_no=flow_serial_no, hard=0)
         self.logger.info(f"Blocked port {portnumber} on switch {datapath.id}")
-        #self.blocked_ports.append(portnumber)
         self.mitigation_flag = 0
-        print(f"mitigation_flag: {self.mitigation_flag}")
         if datapath.id == 1:
             self.blocked_hosts.append(portnumber)
         if datapath.id == 2:
@@ -124,8 +120,8 @@ class SimpleSwitch13(app_manager.RyuApp):
                 if icmp_pkt.type == icmp.ICMP_ECHO_REQUEST:
                     if ip_dst in self.ip_to_mac:
                         if self.ip_to_mac[ip_dst] in self.mac_to_port[dpid]:
-                            self.port_need_to_block = self.mac_to_port[dpid][self.ip_to_mac[ip_dst]]
-                            #self.logger.info("Port connecting to %s: %d", ip_dst, self.port_need_to_block)
+                            self.in_port_on_switch = self.mac_to_port[dpid][self.ip_to_mac[ip_dst]]
+                            #self.logger.info("Port connecting to %s: %d", ip_dst, self.in_port_on_switch)
 
             # TCP SYN
             if ip_pkt.proto == in_proto.IPPROTO_TCP:
@@ -133,16 +129,16 @@ class SimpleSwitch13(app_manager.RyuApp):
                 if tcp_pkt.bits & tcp.TCP_SYN:
                     if ip_dst in self.ip_to_mac:
                         if self.ip_to_mac[ip_dst] in self.mac_to_port[dpid]:
-                            self.port_need_to_block = self.mac_to_port[dpid][self.ip_to_mac[ip_dst]]
-                            #self.logger.info("Port connecting to %s: %d", ip_dst, self.port_need_to_block)
+                            self.in_port_on_switch = self.mac_to_port[dpid][self.ip_to_mac[ip_dst]]
+                            #self.logger.info("Port connecting to %s: %d", ip_dst, self.in_port_on_switch)
 
             # UDP
             if ip_pkt.proto == in_proto.IPPROTO_UDP:
                 udp_pkt = pkt.get_protocol(udp.udp)
                 if ip_dst in self.ip_to_mac:
                     if self.ip_to_mac[ip_dst] in self.mac_to_port[dpid]:
-                        self.port_need_to_block = self.mac_to_port[dpid][self.ip_to_mac[ip_dst]]
-                        #self.logger.info("Port connecting to %s: %d", ip_dst, self.port_need_to_block)
+                        self.in_port_on_switch = self.mac_to_port[dpid][self.ip_to_mac[ip_dst]]
+                        #self.logger.info("Port connecting to %s: %d", ip_dst, self.in_port_on_switch)
 
         if dst in self.mac_to_port[dpid]:
             out_port = self.mac_to_port[dpid][dst]
@@ -150,16 +146,6 @@ class SimpleSwitch13(app_manager.RyuApp):
             out_port = ofproto.OFPP_FLOOD
 
         actions = [parser.OFPActionOutput(out_port)]
-        
-        self.arp_ip_to_port.setdefault(dpid, {})
-        self.arp_ip_to_port[dpid].setdefault(self.port_need_to_block, [])
-        
-        # If ARP request packet, log the IP and MAC address from that port
-        if eth.ethertype == ether_types.ETH_TYPE_ARP:
-            arp_pkt = pkt.get_protocol(arp.arp)
-            if arp_pkt.opcode == arp.ARP_REQUEST or arp_pkt.opcode == arp.ARP_REPLY:
-                if arp_pkt.dst_ip not in self.arp_ip_to_port[dpid][self.port_need_to_block]:
-                    self.arp_ip_to_port[dpid][self.port_need_to_block].append(arp_pkt.dst_ip)
 
         # Install a flow to avoid packet_in next time
         if out_port != ofproto.OFPP_FLOOD:
@@ -189,20 +175,18 @@ class SimpleSwitch13(app_manager.RyuApp):
                                             udp_src=udp_pkt.src_port, udp_dst=udp_pkt.dst_port)
                 
                 if self.mitigation_flag == 1:
-                    #print(f"src_ip: {src_ip}")
-                    
-                    #if dst_ip not in self.arp_ip_to_port[dpid][self.port_need_to_block]:
-                    #print(f"arp_ip_to_port in mitigation: {self.arp_ip_to_port[dpid][self.port_need_to_block]}")
-                    #print(f"port_need_to_block: {self.port_need_to_block}")
-                    #print(f"blocked_ports: {self.blocked_ports}")
+                    # switch 1 connect to h1 h2 h3 with port 1, 2 ,3
+                    # switch 2 connect to h3 h5 h6 with port 1, 2, 3
                     if datapath.id == 1:
-                        host = self.port_need_to_block
+                        host = self.in_port_on_switch
                     if datapath.id == 2:
-                        host = self.port_need_to_block + 3
-                    #if (self.port_need_to_block) not in self.blocked_ports:
+                        host = self.in_port_on_switch + 3
+                    # Determine if the host whose port needs to be blocked has been blocked before?
                     if host not in self.blocked_hosts:
-                        print(f"blocked_hosts: {self.blocked_hosts}")
-                        self.block_port(datapath, self.port_need_to_block)
+                        self.logger.info(f"Warning!!! DDos attack is detected!!!")
+                        self.logger.info(f"Victim is host: h{host}")
+                        self.logger.info(f"The port blocking process is in progress...")
+                        self.block_port(datapath, self.in_port_on_switch)
                         return
 
                 flow_serial_no = get_flow_number()

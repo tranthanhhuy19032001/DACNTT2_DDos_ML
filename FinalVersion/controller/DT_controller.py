@@ -144,7 +144,7 @@ class SimpleMonitor13(switch.SimpleSwitch13):
 
     def _preprocessing_dataset(self, dataset):
         # Delete unnecessary columns
-        dataset = dataset.drop(['timestamp', 'datapath_id', 'flow_id', 'ip_src', 'tp_src', 'ip_dst', 'tp_dst', 'ip_proto', 'icmp_code', 'icmp_type'], axis=1)
+        dataset = dataset.drop(['timestamp', 'datapath_id', 'flow_id', 'ip_src', 'tp_src', 'tp_dst', 'ip_proto', 'icmp_code', 'icmp_type'], axis=1)
         # Replace dots in IP addresses to convert to numerical representation
         dataset['ip_dst'] = dataset['ip_dst'].str.replace('.', '')
         return dataset
@@ -165,7 +165,7 @@ class SimpleMonitor13(switch.SimpleSwitch13):
             predict_flow_dataset = pd.read_csv('PredictTrafficStatsFile.csv')
             predict_flow_dataset = self._preprocessing_dataset(predict_flow_dataset)
 
-            X_predict_flow = predict_flow_dataset.values.astype('float64')
+            X_predict_flow = predict_flow_dataset.values.astype(float)
             y_flow_pred = self.flow_model.predict(X_predict_flow)
 
             self._log_prediction_results(y_flow_pred, predict_flow_dataset)

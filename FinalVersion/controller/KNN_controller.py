@@ -135,6 +135,8 @@ class SimpleMonitor13(switch.SimpleSwitch13):
     def flow_training(self):
         flow_dataset = pd.read_csv('DDos_and_Normal_Traffic_Dataset.csv')
         self._clean_dataset(flow_dataset)
+        flow_dataset = flow_dataset.drop(['timestamp', 'datapath_id', 'flow_id', 'ip_src', 'ip_dst'], axis=1)
+        print(flow_dataset.columns.to_list())
 
         X_flow = flow_dataset.iloc[:, :-1].values.astype('float64')
         y_flow = flow_dataset.iloc[:, -1].values
@@ -147,9 +149,13 @@ class SimpleMonitor13(switch.SimpleSwitch13):
         self._log_training_results(y_flow_test, y_flow_pred)
 
     def _clean_dataset(self, dataset):
-        dataset.iloc[:, 2] = dataset.iloc[:, 2].str.replace('.', '')
-        dataset.iloc[:, 3] = dataset.iloc[:, 3].str.replace('.', '')
-        dataset.iloc[:, 5] = dataset.iloc[:, 5].str.replace('.', '')
+        dataset = dataset.drop(['timestamp', 'datapath_id', 'flow_id', 'ip_src', 'ip_dst'], axis=1)
+        #dataset.iloc[:, 2] = dataset.iloc[:, 2].str.replace('.', '')
+        #dataset.iloc[:, 3] = dataset.iloc[:, 3].str.replace('.', '')
+        #dataset.iloc[:, 5] = dataset.iloc[:, 5].str.replace('.', '')
+        #Replace dots in IP addresses to convert to numerical representation
+        # dataset['ip_src'] = dataset['ip_src'].str.replace('.', '')
+        # dataset['ip_dst'] = dataset['ip_dst'].str.replace('.', '')
 
     def _log_training_results(self, y_true, y_pred):
         cm = confusion_matrix(y_true, y_pred)

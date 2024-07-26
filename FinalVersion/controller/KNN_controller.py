@@ -134,10 +134,10 @@ class SimpleMonitor13(switch.SimpleSwitch13):
 
     def flow_training(self):
         flow_dataset = pd.read_csv('DDos_and_Normal_Traffic_Dataset.csv')
-        self._clean_dataset(flow_dataset)
+        flow_dataset = self._clean_dataset(flow_dataset)
 
-        X_flow = flow_dataset.iloc[:, :-1].values.astype('float64')
-        y_flow = flow_dataset.iloc[:, -1].values
+        X_flow = flow_dataset.drop('label', axis=1).values.astype(float)
+        y_flow = flow_dataset['label'].values
 
         X_flow_train, X_flow_test, y_flow_train, y_flow_test = train_test_split(X_flow, y_flow, test_size=0.25, random_state=0)
         classifier = KNeighborsClassifier(n_neighbors=5, metric='minkowski', p=2)
@@ -147,9 +147,10 @@ class SimpleMonitor13(switch.SimpleSwitch13):
         self._log_training_results(y_flow_test, y_flow_pred)
 
     def _clean_dataset(self, dataset):
-        dataset.iloc[:, 2] = dataset.iloc[:, 2].str.replace('.', '')
-        dataset.iloc[:, 3] = dataset.iloc[:, 3].str.replace('.', '')
-        dataset.iloc[:, 5] = dataset.iloc[:, 5].str.replace('.', '')
+        # # Extract 14 features
+        df_14_features = dataset[['ip_dst', 'idle_timeout', 'hard_timeout', 'packet_count', 'flow_duration_sec', 'byte_count', 'packet_count_per_second', 'byte_count_per_second', 'avg_packet_size', 'flow_duration_total', 'idle_mean', 'idle_std', 'idle_max', 'idle_min', 'label']]
+        df_14_features['ip_dst'] = df_14_features['ip_dst'].str.replace('.', '')
+        return df_14_features
 
     def _log_training_results(self, y_true, y_pred):
         cm = confusion_matrix(y_true, y_pred)
@@ -165,9 +166,9 @@ class SimpleMonitor13(switch.SimpleSwitch13):
     def flow_predict(self):
         try:
             predict_flow_dataset = pd.read_csv('PredictTrafficStatsFile.csv')
-            self._clean_dataset(predict_flow_dataset)
+            predict_flow_dataset = self._clean_dataset(predict_flow_dataset)
 
-            X_predict_flow = predict_flow_dataset.values.astype('float64')
+            X_predict_flow = predict_flow_dataset.values.astype(float)
             y_flow_pred = self.flow_model.predict(X_predict_flow)
 
             self._log_prediction_results(y_flow_pred, predict_flow_dataset)

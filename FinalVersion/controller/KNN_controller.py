@@ -9,6 +9,8 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import confusion_matrix, accuracy_score
+from sklearn.preprocessing import StandardScaler
+from imblearn.over_sampling import SMOTE
 
 class SimpleMonitor13(switch.SimpleSwitch13):
     
@@ -133,29 +135,38 @@ class SimpleMonitor13(switch.SimpleSwitch13):
         return numerator / denominator if denominator else 0
 
     def flow_training(self):
-        flow_dataset = pd.read_csv('DDos_and_Normal_Traffic_Dataset.csv')
-        self._clean_dataset(flow_dataset)
-        flow_dataset = flow_dataset.drop(['timestamp', 'datapath_id', 'flow_id', 'ip_src', 'ip_dst'], axis=1)
-        print(flow_dataset.columns.to_list())
+        # flow_dataset = pd.read_csv('DDos_and_Normal_Traffic_Dataset.csv')
+        df = pd.read_csv('dataset.csv')
+        self._clean_dataset(df)
 
-        X_flow = flow_dataset.iloc[:, :-1].values.astype('float64')
-        y_flow = flow_dataset.iloc[:, -1].values
+        # Shuffle dữ liệu
+        cleaned_df = df.sample(frac=1, random_state=42).reset_index(drop=True)
 
-        X_flow_train, X_flow_test, y_flow_train, y_flow_test = train_test_split(X_flow, y_flow, test_size=0.25, random_state=0)
-        classifier = KNeighborsClassifier(n_neighbors=5, metric='minkowski', p=2)
-        self.flow_model = classifier.fit(X_flow_train, y_flow_train)
+        # Stratified sampling để chia dữ liệu thành tập huấn luyện và kiểm tra
+        X = cleaned_df.drop('label', axis=1)
+        y = cleaned_df['label']
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, stratify=y, random_state=42)
 
-        y_flow_pred = self.flow_model.predict(X_flow_test)
-        self._log_training_results(y_flow_test, y_flow_pred)
+        # Over-sampling using SMOTE
+        smote = SMOTE(random_state=42)
+        X_train_resampled, y_train_resampled = smote.fit_resample(X_train, y_train)
+
+        # Standardized data
+        scaler = StandardScaler()
+        X_train_resampled = scaler.fit_transform(X_train_resampled)
+        X_test = scaler.transform(X_test)
+
+        classifier = KNeighborsClassifier(n_neighbors=5, metric='minkowski', p=2, weights='distance')
+        self.flow_model = classifier.fit(X_train_resampled, y_train_resampled)
+
+        y_pred = self.flow_model.predict(X_test)
+        self._log_training_results(y_test, y_pred)
 
     def _clean_dataset(self, dataset):
-        dataset = dataset.drop(['timestamp', 'datapath_id', 'flow_id', 'ip_src', 'ip_dst'], axis=1)
-        #dataset.iloc[:, 2] = dataset.iloc[:, 2].str.replace('.', '')
-        #dataset.iloc[:, 3] = dataset.iloc[:, 3].str.replace('.', '')
-        #dataset.iloc[:, 5] = dataset.iloc[:, 5].str.replace('.', '')
-        #Replace dots in IP addresses to convert to numerical representation
-        # dataset['ip_src'] = dataset['ip_src'].str.replace('.', '')
-        # dataset['ip_dst'] = dataset['ip_dst'].str.replace('.', '')
+        dataset.drop(['timestamp', 'datapath_id', 'flow_id', 'ip_src', 'tp_src', 'ip_dst', 'tp_dst', 'ip_proto', 'icmp_code', 'icmp_type'], axis=1, inplace=True)
+        # dataset.iloc[:, 2] = dataset.iloc[:, 2].str.replace('.', '')
+        # dataset.iloc[:, 3] = dataset.iloc[:, 3].str.replace('.', '')
+        # dataset.iloc[:, 5] = dataset.iloc[:, 5].str.replace('.', '')
 
     def _log_training_results(self, y_true, y_pred):
         cm = confusion_matrix(y_true, y_pred)

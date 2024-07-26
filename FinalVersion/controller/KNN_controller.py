@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.metrics import confusion_matrix, accuracy_score
+from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score
 
 class SimpleMonitor13(switch.SimpleSwitch13):
     
@@ -133,8 +133,8 @@ class SimpleMonitor13(switch.SimpleSwitch13):
         return numerator / denominator if denominator else 0
 
     def flow_training(self):
-        flow_dataset = pd.read_csv('DDos_and_Normal_Traffic_Dataset.csv')
-        flow_dataset = self._clean_dataset(flow_dataset)
+        dataset = pd.read_csv('DDos_and_Normal_Traffic_Dataset.csv')
+        flow_dataset = self._preprocessing_data_for_training(dataset)
 
         X_flow = flow_dataset.drop('label', axis=1).values.astype(float)
         y_flow = flow_dataset['label'].values
@@ -146,31 +146,44 @@ class SimpleMonitor13(switch.SimpleSwitch13):
         y_flow_pred = self.flow_model.predict(X_flow_test)
         self._log_training_results(y_flow_test, y_flow_pred)
 
-    def _clean_dataset(self, dataset):
-        # # Extract 14 features
-        df_14_features = dataset[['ip_dst', 'idle_timeout', 'hard_timeout', 'packet_count', 'flow_duration_sec', 'byte_count', 'packet_count_per_second', 'byte_count_per_second', 'avg_packet_size', 'flow_duration_total', 'idle_mean', 'idle_std', 'idle_max', 'idle_min', 'label']]
-        df_14_features['ip_dst'] = df_14_features['ip_dst'].str.replace('.', '')
-        return df_14_features
+    def _preprocessing_data_for_training(self, dataset):
+        # Extract 15 features
+        dataset = dataset[['ip_src', 'ip_dst', 'flow_duration_nsec', 'flags', 'packet_count', 'flow_duration_sec', 'byte_count', 'packet_count_per_second', 'byte_count_per_second', 'avg_packet_size', 'flow_duration_total', 'idle_mean', 'idle_std', 'idle_max', 'idle_min', 'label']]
+        dataset.loc[:, 'ip_src'] = dataset['ip_src'].str.replace('.', '')
+        dataset.loc[:, 'ip_dst'] = dataset['ip_dst'].str.replace('.', '')
+        return dataset
+        
+    def _preprocessing_data_for_predict(self, dataset):
+        # Extract 15 features
+        dataset = dataset[['ip_src', 'ip_dst', 'flow_duration_nsec', 'flags', 'packet_count', 'flow_duration_sec', 'byte_count', 'packet_count_per_second', 'byte_count_per_second', 'avg_packet_size', 'flow_duration_total', 'idle_mean', 'idle_std', 'idle_max', 'idle_min']]
+        dataset.loc[:, 'ip_src'] = dataset['ip_src'].str.replace('.', '')
+        dataset.loc[:, 'ip_dst'] = dataset['ip_dst'].str.replace('.', '')
+        return dataset
 
     def _log_training_results(self, y_true, y_pred):
         cm = confusion_matrix(y_true, y_pred)
         acc = accuracy_score(y_true, y_pred)
+        precision = precision_score(y_true, y_pred, average='weighted')
+        recall = recall_score(y_true, y_pred, average='weighted')
+        f1 = f1_score(y_true, y_pred, average='weighted')
 
         self.logger.info("------------------------------------------------------------------------------")
         self.logger.info("Confusion matrix")
         self.logger.info(cm)
-        self.logger.info("Success accuracy = {:.2f} %".format(acc * 100))
-        self.logger.info("Fail accuracy = {:.2f} %".format((1.0 - acc) * 100))
+        self.logger.info("Success accuracy = {:.3f} %".format(acc * 100))
+        self.logger.info("Fail accuracy = {:.3f} %".format(precision * 100))
+        self.logger.info("Precision = {:.3f} %".format((1.0 - acc) * 100))
+        self.logger.info("Recall = {:.3f} %".format(recall * 100))
+        self.logger.info("F1 Score = {:.3f} %".format(f1 * 100))
         self.logger.info("------------------------------------------------------------------------------")
 
     def flow_predict(self):
         try:
-            predict_flow_dataset = pd.read_csv('PredictTrafficStatsFile.csv')
-            predict_flow_dataset = self._clean_dataset(predict_flow_dataset)
+            dataset = pd.read_csv('PredictTrafficStatsFile.csv')
+            predict_flow_dataset = self._preprocessing_data_for_predict(dataset)
 
             X_predict_flow = predict_flow_dataset.values.astype(float)
             y_flow_pred = self.flow_model.predict(X_predict_flow)
-
             self._log_prediction_results(y_flow_pred, predict_flow_dataset)
             self._reset_prediction_file()
 
@@ -178,6 +191,7 @@ class SimpleMonitor13(switch.SimpleSwitch13):
             pass
 
     def _log_prediction_results(self, y_pred, dataset):
+        print("---SHOW RESULT---")
         legitimate_trafic = sum(1 for i in y_pred if i == 0)
         ddos_trafic = len(y_pred) - legitimate_trafic
 
@@ -200,10 +214,10 @@ class SimpleMonitor13(switch.SimpleSwitch13):
         else:
             # If two last traffic have the same destination, then display the Victim host
             # Else traffic hasn't been completed yet, so I cannot correctly identify the Victim host
-            if (int(dataset.iloc[ddos_trafic - 2, 5]) == int(dataset.iloc[ddos_trafic - 1, 5])):
-                print(dataset)
+            if (int(dataset.iloc[ddos_trafic - 2, 1]) == int(dataset.iloc[ddos_trafic - 1, 1])):
+                #print(dataset)
                 self.logger.warning("DDos attack is detected!!!")
-                victim = int(dataset.iloc[ddos_trafic - 1, 5]) % 10
+                victim = int(dataset.iloc[ddos_trafic - 1, 1]) % 10
                 self.logger.warning(f"Victim is host: h{victim}")
         self.logger.info("------------------------------------------------------------------------------")
         self.logger.info("------------------------------------------------------------------------------")

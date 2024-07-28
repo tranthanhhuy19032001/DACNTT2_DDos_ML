@@ -17,10 +17,6 @@ class SimpleMonitor13(switch.SimpleSwitch13):
         self.datapaths = {}
         self.monitor_thread = hub.spawn(self._monitor)
         self.flow_data = {}
-        # predict accumulating
-        #self.legitimate_traffic_counts = []
-        #self.ddos_traffic_counts = []
-        #self.window_size = 3
 
         print("Start training...")
         start = datetime.now()
@@ -31,6 +27,7 @@ class SimpleMonitor13(switch.SimpleSwitch13):
 
     @set_ev_cls(ofp_event.EventOFPStateChange, [MAIN_DISPATCHER, DEAD_DISPATCHER])
     def _state_change_handler(self, ev):
+        # Handle changes in the state of the switch (register/unregister)
         datapath = ev.datapath
         if ev.state == MAIN_DISPATCHER:
             if datapath.id not in self.datapaths:
@@ -42,13 +39,15 @@ class SimpleMonitor13(switch.SimpleSwitch13):
                 del self.datapaths[datapath.id]
 
     def _monitor(self):
+        # Monitor the switches and request statistics at regular intervals
         while True:
             for dp in self.datapaths.values():
                 self._request_stats(dp)
-            hub.sleep(20) # Increase Request Interval to 20 Seconds
+            hub.sleep(20)  # Request interval is 20 seconds
             self.flow_predict()
 
     def _request_stats(self, datapath):
+        # Send a request to get flow statistics from the switch
         self.logger.debug('send stats request: %016x', datapath.id)
         parser = datapath.ofproto_parser
         req = parser.OFPFlowStatsRequest(datapath)
@@ -56,6 +55,7 @@ class SimpleMonitor13(switch.SimpleSwitch13):
 
     @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)
     def _flow_stats_reply_handler(self, ev):
+        # Handle the reply from the switch with flow statistics
         timestamp = datetime.now().timestamp()
 
         file = open("PredictTrafficStatsFile.csv","w")
@@ -70,6 +70,7 @@ class SimpleMonitor13(switch.SimpleSwitch13):
         for stat in sorted([flow for flow in body if flow.priority == 1],
             key=lambda flow: (flow.match['eth_type'], flow.match['ipv4_src'], flow.match['ipv4_dst'], flow.match['ip_proto'])):
 
+            # Extract flow information from the statistics
             ip_src = stat.match['ipv4_src']
             ip_dst = stat.match['ipv4_dst']
             ip_proto = stat.match['ip_proto']
@@ -96,6 +97,7 @@ class SimpleMonitor13(switch.SimpleSwitch13):
             flow_duration_total = stat.duration_sec + (stat.duration_nsec / 1e9)
             idle_mean, idle_std, idle_max, idle_min = self._calculate_idle_times(flow_id)
 
+            # Write flow statistics to the prediction file
             file.write("{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n"
                 .format(timestamp, ev.msg.datapath.id, flow_id, ip_src, tp_src,ip_dst, tp_dst,
                         stat.match['ip_proto'],icmp_code,icmp_type,
@@ -110,6 +112,7 @@ class SimpleMonitor13(switch.SimpleSwitch13):
         file.close()
 
     def _update_flow_data(self, flow_id, timestamp):
+        # Update the flow data with the latest timestamp and idle time
         if flow_id not in self.flow_data:
             self.flow_data[flow_id] = {'last_seen': timestamp, 'idle_times': []}
         else:
@@ -118,6 +121,7 @@ class SimpleMonitor13(switch.SimpleSwitch13):
             self.flow_data[flow_id]['last_seen'] = timestamp
 
     def _calculate_idle_times(self, flow_id):
+        # Calculate idle times statistics
         idle_times = self.flow_data[flow_id]['idle_times']
         if idle_times:
             idle_mean = np.mean(idle_times)
@@ -130,9 +134,11 @@ class SimpleMonitor13(switch.SimpleSwitch13):
 
     @staticmethod
     def safe_divide(numerator, denominator):
+        # Safely divide two numbers to avoid division by zero
         return numerator / denominator if denominator else 0
 
     def flow_training(self):
+        # Train the KNN model using the dataset
         dataset = pd.read_csv('DDos_and_Normal_Traffic_Dataset.csv')
         flow_dataset = self._preprocessing_data_for_training(dataset)
 
@@ -146,6 +152,7 @@ class SimpleMonitor13(switch.SimpleSwitch13):
         y_flow_pred = self.flow_model.predict(X_flow_test)
         self._log_training_results(y_flow_test, y_flow_pred)
 
+    # Preprocess the dataset for training
     def _preprocessing_data_for_training(self, dataset):
         # Extract 15 features
         dataset = dataset[['ip_src', 'ip_dst', 'flow_duration_nsec', 'flags', 'packet_count', 'flow_duration_sec', 'byte_count', 'packet_count_per_second', 'byte_count_per_second', 'avg_packet_size', 'flow_duration_total', 'idle_mean', 'idle_std', 'idle_max', 'idle_min', 'label']]
@@ -153,6 +160,7 @@ class SimpleMonitor13(switch.SimpleSwitch13):
         dataset.loc[:, 'ip_dst'] = dataset['ip_dst'].str.replace('.', '')
         return dataset
         
+    # Preprocess the dataset for prediction
     def _preprocessing_data_for_predict(self, dataset):
         # Extract 15 features
         dataset = dataset[['ip_src', 'ip_dst', 'flow_duration_nsec', 'flags', 'packet_count', 'flow_duration_sec', 'byte_count', 'packet_count_per_second', 'byte_count_per_second', 'avg_packet_size', 'flow_duration_total', 'idle_mean', 'idle_std', 'idle_max', 'idle_min']]
@@ -161,6 +169,7 @@ class SimpleMonitor13(switch.SimpleSwitch13):
         return dataset
 
     def _log_training_results(self, y_true, y_pred):
+        # Log the results of the training process
         cm = confusion_matrix(y_true, y_pred)
         acc = accuracy_score(y_true, y_pred)
         precision = precision_score(y_true, y_pred, average='weighted')
@@ -178,6 +187,7 @@ class SimpleMonitor13(switch.SimpleSwitch13):
         self.logger.info("------------------------------------------------------------------------------")
 
     def flow_predict(self):
+        # Predict the traffic type using the trained model
         try:
             dataset = pd.read_csv('PredictTrafficStatsFile.csv')
             predict_flow_dataset = self._preprocessing_data_for_predict(dataset)
@@ -191,22 +201,10 @@ class SimpleMonitor13(switch.SimpleSwitch13):
             pass
 
     def _log_prediction_results(self, y_pred, dataset):
+        # Log the results of the prediction process
         print("---SHOW RESULT---")
         legitimate_trafic = sum(1 for i in y_pred if i == 0)
         ddos_trafic = len(y_pred) - legitimate_trafic
-
-        # Comment handle predict accumulating
-        #self.legitimate_traffic_counts.append(legitimate_trafic)
-        #self.ddos_traffic_counts.append(ddos_trafic)
-
-        # Maintain the sliding window
-        #if len(self.legitimate_traffic_counts) > self.window_size:
-        #    self.legitimate_traffic_counts.pop(0)
-        #    self.ddos_traffic_counts.pop(0)
-
-        #total_legitimate = sum(self.legitimate_traffic_counts)
-        #total_ddos = sum(self.ddos_traffic_counts)
-        #total_flows = total_legitimate + total_ddos
         
         # Checks if the proportion of legitimate traffic is greater than 80%. If it is, it logs "Legitimate traffic". If not, it logs "DDos attack is detected!!!".
         if (legitimate_trafic / (legitimate_trafic + ddos_trafic) * 100) > 80:
@@ -224,6 +222,7 @@ class SimpleMonitor13(switch.SimpleSwitch13):
 
     @staticmethod
     def _reset_prediction_file():
+        # Reset the prediction file for the next batch of predictions
         file = open("PredictTrafficStatsFile.csv","w")
         file.write(
             'timestamp,datapath_id,flow_id,ip_src,tp_src,ip_dst,tp_dst,ip_proto,icmp_code,icmp_type,'

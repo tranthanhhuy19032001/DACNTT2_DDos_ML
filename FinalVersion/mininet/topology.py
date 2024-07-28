@@ -77,7 +77,7 @@ def startNetwork():
     topo = MyTopology()
 
     # Define the remote controller with its IP and port
-    ryu_controller = RemoteController('ryu_controller', ip='192.168.56.103', port=6653)
+    ryu_controller = RemoteController('ryu_controller', ip='192.168.56.104', port=6653)
     
     # Initialize the Mininet network with the custom topology and traffic control links
     net = Mininet(topo=topo, link=TCLink, controller=ryu_controller)

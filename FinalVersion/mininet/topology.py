@@ -86,6 +86,19 @@ def startNetwork():
     # Configure the network settings
     configure_network(net)
 
+    # Retrieve the hosts from the network
+    h1 = net.get('h1')
+
+    # Set up a simple HTTP server on host h1
+    print("Creating a web server on host h1")
+    log_file = '/home/mininet/mininet/mininet/DACNTT2_DDos_ML/FinalVersion/mininet/http_server.log'
+    # Check current directory and list files before starting the server
+    h1.cmd('pwd')
+    h1.cmd('ls -l /home/mininet/mininet/mininet/DACNTT2_DDos_ML/FinalVersion/mininet')
+    # Start the HTTP server with logging
+    h1.cmd(f'cd /home/mininet/mininet/mininet/DACNTT2_DDos_ML/FinalVersion/mininet && python3 custom_http_server.py &')
+    print("Web Server is listening on 192.168.0.1 port 80")
+
     # Start the CLI for interactive commands
     CLI(net)
     # Stop the network after exiting the CLI

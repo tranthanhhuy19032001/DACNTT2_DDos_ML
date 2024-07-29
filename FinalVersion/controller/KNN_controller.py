@@ -181,7 +181,7 @@ class SimpleMonitor13(switch.SimpleSwitch13):
         self.logger.info(cm)
         self.logger.info("Success accuracy = {:.3f} %".format(acc * 100))
         self.logger.info("Fail accuracy = {:.3f} %".format((1 - acc) * 100))
-        self.logger.info("Precision = {:.3f} %".format((1.0 - acc) * 100))
+        self.logger.info("Precision = {:.3f} %".format(precision * 100))
         self.logger.info("Recall = {:.3f} %".format(recall * 100))
         self.logger.info("F1 Score = {:.3f} %".format(f1 * 100))
         self.logger.info("------------------------------------------------------------------------------")

@@ -46,7 +46,7 @@ class SimpleMonitor13(switch.SimpleSwitch13):
             self.flag = 0
             for dp in self.datapaths.values():
                 self._request_stats(dp)
-            hub.sleep(30)
+            hub.sleep(20)
             self.flow_predict()
             self.mitigation_flag = self.flag
 
@@ -181,14 +181,13 @@ class SimpleMonitor13(switch.SimpleSwitch13):
         self.logger.info(cm)
         self.logger.info("Success accuracy = {:.3f} %".format(acc * 100))
         self.logger.info("Fail accuracy = {:.3f} %".format((1 - acc) * 100))
-        self.logger.info("Precision = {:.3f} %".format((1.0 - acc) * 100))
+        self.logger.info("Precision = {:.3f} %".format(precision * 100))
         self.logger.info("Recall = {:.3f} %".format(recall * 100))
         self.logger.info("F1 Score = {:.3f} %".format(f1 * 100))
         self.logger.info("------------------------------------------------------------------------------")
 
     def flow_predict(self):
         # Predict the traffic type using the trained model
-        print("flow_predict of CONTROLLER")
         self.flag = 0
         try:
             dataset = pd.read_csv('PredictTrafficStatsFile.csv')
@@ -214,15 +213,7 @@ class SimpleMonitor13(switch.SimpleSwitch13):
             self.logger.info("Benign traffic ...")
             self.flag = 0
         else:
-            # If two last traffic have the same destination, then display the Victim host
-            # Else traffic hasn't been completed yet, so I cannot correctly identify the Victim host
-            if (int(dataset.iloc[ddos_trafic - 2, 1]) == int(dataset.iloc[ddos_trafic - 1, 1])):
-                #print(dataset)
-                #self.logger.info("DDos attack is detected!!!")
-                #victim = int(dataset.iloc[ddos_trafic - 1, 5]) % 10
-                #self.logger.info(f"Victim is host: h{victim}")
-                # Handle mitigation
-                self.flag = 1
+            self.flag = 1
         self.logger.info("------------------------------------------------------------------------------")
         self.logger.info("------------------------------------------------------------------------------")
 
